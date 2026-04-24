@@ -12,14 +12,12 @@ module.exports = {
         return;
       }
 
-      logger.success("🚀 New PR Detected");
-
-      logger.info(`Title  : ${pr.title}`);
-      logger.info(`Author : ${pr.user.login}`);
-      logger.info(`Repo   : ${payload.repository.full_name}`);
-      logger.info(`URL    : ${pr.html_url}`);
-      logger.info(`Branch : ${pr.head.ref} → ${pr.base.ref}`);
-      logger.info(`State  : ${pr.state}`);
+      logger.success(`🚀 PR detected: ${pr.title}`);
+      logger.info(`👤 Author: ${pr.user.login}`);
+      logger.info(`📦 Repo  : ${payload.repository.full_name}`);
+      logger.info(`🔗 URL   : ${pr.html_url}`);
+      logger.info(`🌿 Branch: ${pr.head.ref} → ${pr.base.ref}`);
+      logger.info(`📌 State : ${pr.state}`);
     } catch (err) {
       logger.error("Error handling PR: " + err.message);
     }

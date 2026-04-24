@@ -1,23 +1,10 @@
 // utils/logger.js
 
-const getTime = () => {
-  return new Date().toISOString();
-};
+const timestamp = () => new Date().toISOString();
 
 module.exports = {
-  info: (message) => {
-    console.log(`[${getTime()}] ℹ️ INFO: ${message}`);
-  },
-
-  error: (message) => {
-    console.error(`[${getTime()}] ❌ ERROR: ${message}`);
-  },
-
-  success: (message) => {
-    console.log(`[${getTime()}] ✅ SUCCESS: ${message}`);
-  },
-
-  warn: (message) => {
-    console.warn(`[${getTime()}] ⚠️ WARN: ${message}`);
-  }
+  info: (msg) => console.log(`[${timestamp()}] ℹ️ ${msg}`),
+  success: (msg) => console.log(`[${timestamp()}] ✅ ${msg}`),
+  error: (msg) => console.error(`[${timestamp()}] ❌ ${msg}`),
+  warn: (msg) => console.warn(`[${timestamp()}] ⚠️ ${msg}`)
 };
