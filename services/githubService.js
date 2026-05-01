@@ -5,6 +5,7 @@ const logger = require("../utils/logger");
 const { processDiff } = require("./diffProcessor");
 const { formatForLLM } = require("./formatter");
 const { logPerformance } = require("./performanceLogger");
+const { analyzeCode } = require("./aiService");
 
 // ─── Fetch the raw diff from GitHub API ───────────────────────────────────────
 async function fetchPRDiff(owner, repo, prNumber) {
@@ -32,11 +33,16 @@ async function handleDiff(owner, repo, prNumber) {
     const { diff, fetchTime } = await fetchPRDiff(owner, repo, prNumber);
     const { files, processingTime } = processDiff(diff);
     const formatted = formatForLLM(files);
+    const analysis = await analyzeCode(formatted);
 
     logPerformance(fetchTime, processingTime);
     logger.info("📦 Clean Extracted Code:\n" + formatted);
+    logger.info("🧠 AI Analysis:\n" + analysis.markdown);
 
-    return formatted;
+    return {
+      formattedCode: formatted,
+      analysis
+    };
   } catch (err) {
     logger.error(`❌ handleDiff error: ${err.message}`);
     throw err;
