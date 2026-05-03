@@ -27,6 +27,30 @@ async function fetchPRDiff(owner, repo, prNumber) {
   };
 }
 
+async function postPRComment(owner, repo, prNumber, body) {
+  await axios.post(
+    `https://api.github.com/repos/${owner}/${repo}/issues/${prNumber}/comments`,
+    { body },
+    {
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${process.env.GITHUB_TOKEN}`
+      }
+    }
+  );
+}
+
+function buildPRComment(analysis) {
+  return [
+    "## GitGuard AI Review",
+    "",
+    analysis.markdown,
+    "",
+    "---",
+    "_Generated automatically by GitGuard AI_"
+  ].join("\n");
+}
+
 // ─── Orchestrate: fetch → process → format → log ─────────────────────────────
 async function handleDiff(owner, repo, prNumber) {
   try {
@@ -38,6 +62,8 @@ async function handleDiff(owner, repo, prNumber) {
     logPerformance(fetchTime, processingTime);
     logger.info("📦 Clean Extracted Code:\n" + formatted);
     logger.info("🧠 AI Analysis:\n" + analysis.markdown);
+    await postPRComment(owner, repo, prNumber, buildPRComment(analysis));
+    logger.success(`💬 Posted AI review comment on PR #${prNumber}`);
 
     return {
       formattedCode: formatted,
@@ -68,4 +94,4 @@ function handlePullRequest(payload) {
   }
 }
 
-module.exports = { fetchPRDiff, handleDiff, handlePullRequest };
+module.exports = { fetchPRDiff, handleDiff, handlePullRequest, postPRComment };
