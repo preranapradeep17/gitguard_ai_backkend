@@ -146,13 +146,27 @@ function toMarkdown(review) {
   ].join("\n");
 }
 
-async function analyzeCode(code) {
+function buildPromptWithRules(settings = {}) {
+  const prompt = [REVIEW_PROMPT];
+
+  if (settings.ignoreStyling) {
+    prompt.push("Ignore pure formatting/styling-only comments unless they cause bugs or security risks.");
+  }
+  if (settings.strictMode) {
+    prompt.push("Be strict: flag edge cases, risky logic, and potential reliability issues aggressively.");
+  }
+
+  return prompt.join(" ");
+}
+
+async function analyzeCode(code, options = {}) {
   if (!code || typeof code !== "string" || code.trim().length === 0) {
     throw new Error("analyzeCode(code) requires non-empty code text.");
   }
 
   try {
     const client = getOpenAIClient();
+    const prompt = buildPromptWithRules(options.settings);
     const response = await withRetries(
       () =>
         withTimeout(
@@ -161,7 +175,7 @@ async function analyzeCode(code) {
             input: [
               {
                 role: "system",
-                content: [{ type: "text", text: REVIEW_PROMPT }]
+                content: [{ type: "text", text: prompt }]
               },
               {
                 role: "user",
