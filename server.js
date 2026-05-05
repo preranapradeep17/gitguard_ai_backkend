@@ -3,6 +3,8 @@ const path = require("path");
 require("dotenv").config({ path: path.join(__dirname, ".env") });
 const webhookRoute = require("./routes/webhook");
 const analyzeRoute = require("./routes/analyze");
+const settingsRoute = require("./routes/settings");
+const historyRoute = require("./routes/history");
 
 const app = express();
 
@@ -21,6 +23,8 @@ app.use((req, res, next) => {
 
 app.use("/webhook", webhookRoute);
 app.use("/analyze", analyzeRoute);
+app.use("/settings", settingsRoute);
+app.use("/history", historyRoute);
 
 app.get("/", (req, res) => {
   res.send("GitGuard AI running 🚀");
