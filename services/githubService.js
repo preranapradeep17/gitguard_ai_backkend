@@ -6,6 +6,8 @@ const { processDiff } = require("./diffProcessor");
 const { formatForLLM } = require("./formatter");
 const { logPerformance } = require("./performanceLogger");
 const { analyzeCode } = require("./aiService");
+const { getSettings } = require("../models/settings");
+const { addReview } = require("../models/reviewHistory");
 
 // ─── Fetch the raw diff from GitHub API ───────────────────────────────────────
 async function fetchPRDiff(owner, repo, prNumber) {
@@ -54,10 +56,12 @@ function buildPRComment(analysis) {
 // ─── Orchestrate: fetch → process → format → log ─────────────────────────────
 async function handleDiff(owner, repo, prNumber) {
   try {
+    const repoFullName = `${owner}/${repo}`;
     const { diff, fetchTime } = await fetchPRDiff(owner, repo, prNumber);
     const { files, processingTime } = processDiff(diff);
     const formatted = formatForLLM(files);
-    const analysis = await analyzeCode(formatted);
+    const settings = getSettings(repoFullName);
+    const analysis = await analyzeCode(formatted, { settings });
 
     logPerformance(fetchTime, processingTime);
     logger.info("📦 Clean Extracted Code:\n" + formatted);
@@ -65,9 +69,20 @@ async function handleDiff(owner, repo, prNumber) {
     await postPRComment(owner, repo, prNumber, buildPRComment(analysis));
     logger.success(`💬 Posted AI review comment on PR #${prNumber}`);
 
+    addReview({
+      repo: repoFullName,
+      prNumber,
+      settings,
+      riskLevel: analysis.riskLevel,
+      issuesCount: analysis.issuesFound.length,
+      analysis,
+      timestamp: new Date().toISOString()
+    });
+
     return {
       formattedCode: formatted,
-      analysis
+      analysis,
+      settings
     };
   } catch (err) {
     logger.error(`❌ handleDiff error: ${err.message}`);
