@@ -28,12 +28,20 @@ const REVIEW_SCHEMA = {
           title: { type: "string" },
           severity: { type: "string", enum: ["Low", "Medium", "High", "Critical"] },
           category: { type: "string" },
-          file: { type: "string" },
-          line: { type: "integer" },
+          file: { type: ["string", "null"] },
+          line: { type: ["integer", "null"] },
           description: { type: "string" },
           recommendation: { type: "string" }
         },
-        required: ["title", "severity", "category", "description", "recommendation"]
+        required: [
+          "title",
+          "severity",
+          "category",
+          "file",
+          "line",
+          "description",
+          "recommendation"
+        ]
       }
     },
     explanation: { type: "string" },
