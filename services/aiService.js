@@ -1,67 +1,32 @@
-const OpenAI = require("openai");
-const logger = require("../utils/logger");
+const dotenv = require("dotenv");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
-const AI_TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS || 30000);
+dotenv.config();
+
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+const AI_TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS || 45000);
 const AI_MAX_RETRIES = Number(process.env.AI_MAX_RETRIES || 2);
 
 const REVIEW_PROMPT = [
   "You are a senior backend code review assistant.",
-  "Analyze ONLY the provided code diff. Do not assume missing files or context.",
-  "Find potential bugs, security issues, and quality improvements.",
-  "Provide clear and practical fixed code suggestions.",
-  "Return strict JSON only."
+  "Analyze ONLY the provided code snippet/diff. Do not assume missing files or context.",
+  "Find bugs, security issues, and practical quality improvements.",
+  "Return strict JSON only, no markdown fences or extra prose."
 ].join(" ");
 
-const REVIEW_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  properties: {
-    riskLevel: { type: "string", enum: ["Low", "Medium", "High", "Critical"] },
-    issuesFound: {
-      type: "array",
-      items: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          title: { type: "string" },
-          severity: { type: "string", enum: ["Low", "Medium", "High", "Critical"] },
-          category: { type: "string" },
-          file: { type: ["string", "null"] },
-          line: { type: ["integer", "null"] },
-          description: { type: "string" },
-          recommendation: { type: "string" }
-        },
-        required: [
-          "title",
-          "severity",
-          "category",
-          "file",
-          "line",
-          "description",
-          "recommendation"
-        ]
-      }
-    },
-    explanation: { type: "string" },
-    suggestedFix: { type: "string" }
-  },
-  required: ["riskLevel", "issuesFound", "explanation", "suggestedFix"]
-};
+let geminiClient;
 
-let openaiClient;
-
-function getOpenAIClient() {
-  if (!OPENAI_API_KEY) {
-    throw new Error("Missing OPENAI_API_KEY environment variable.");
+function getGeminiClient() {
+  if (!GEMINI_API_KEY) {
+    throw new Error("Missing GEMINI_API_KEY environment variable.");
   }
 
-  if (!openaiClient) {
-    openaiClient = new OpenAI({ apiKey: OPENAI_API_KEY });
+  if (!geminiClient) {
+    geminiClient = new GoogleGenerativeAI(GEMINI_API_KEY);
   }
 
-  return openaiClient;
+  return geminiClient;
 }
 
 function withTimeout(promise, timeoutMs) {
@@ -69,7 +34,6 @@ function withTimeout(promise, timeoutMs) {
   const timeoutPromise = new Promise((_, reject) => {
     timeoutId = setTimeout(() => reject(new Error("AI request timed out.")), timeoutMs);
   });
-
   return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timeoutId));
 }
 
@@ -80,53 +44,80 @@ async function withRetries(taskFn, maxRetries) {
       return await taskFn();
     } catch (error) {
       lastError = error;
-      logger.warn(`AI request attempt ${attempt + 1} failed: ${error.message}`);
-      if (attempt === maxRetries) {
-        break;
-      }
-      // Exponential backoff
-      const delay = 2000 * Math.pow(2, attempt);
-      await new Promise(r => setTimeout(r, delay));
+      if (attempt === maxRetries) break;
+      const delay = 1200 * Math.pow(2, attempt);
+      await new Promise((r) => setTimeout(r, delay));
     }
   }
   throw lastError;
 }
 
-function validateReviewResponse(data) {
+function extractJsonObject(text) {
+  if (!text || typeof text !== "string") {
+    throw new Error("Empty AI response.");
+  }
+  const cleaned = text.trim();
+  const fenceStripped = cleaned
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/```$/i, "")
+    .trim();
+
+  const start = fenceStripped.indexOf("{");
+  const end = fenceStripped.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) {
+    throw new Error("Could not find JSON object in AI response.");
+  }
+  return JSON.parse(fenceStripped.slice(start, end + 1));
+}
+
+function normalizeIssue(issue) {
+  if (typeof issue === "string") {
+    return {
+      title: issue,
+      severity: "Medium",
+      category: "General",
+      file: null,
+      line: null,
+      description: issue,
+      recommendation: "Review and refactor this section to reduce risk."
+    };
+  }
+
+  return {
+    title: typeof issue?.title === "string" ? issue.title : "Potential issue",
+    severity: ["Low", "Medium", "High", "Critical"].includes(issue?.severity)
+      ? issue.severity
+      : "Medium",
+    category: typeof issue?.category === "string" ? issue.category : "General",
+    file: typeof issue?.file === "string" ? issue.file : null,
+    line: Number.isInteger(issue?.line) ? issue.line : null,
+    description: typeof issue?.description === "string" ? issue.description : "Potential risk found.",
+    recommendation:
+      typeof issue?.recommendation === "string"
+        ? issue.recommendation
+        : "Apply a safer pattern and add validation/tests."
+  };
+}
+
+function normalizeReview(data) {
   const allowedRisk = new Set(["Low", "Medium", "High", "Critical"]);
 
-  if (!data || typeof data !== "object") {
-    throw new Error("Invalid AI response: expected object.");
-  }
-  if (!allowedRisk.has(data.riskLevel)) {
-    throw new Error("Invalid AI response: riskLevel missing/invalid.");
-  }
-  if (!Array.isArray(data.issuesFound)) {
-    throw new Error("Invalid AI response: issuesFound should be an array.");
-  }
-  for (const issue of data.issuesFound) {
-    if (!issue || typeof issue !== "object") {
-      throw new Error("Invalid AI response: each issue must be an object.");
-    }
-    if (!allowedRisk.has(issue.severity)) {
-      throw new Error("Invalid AI response: issue severity missing/invalid.");
-    }
-    const requiredStrings = ["title", "category", "description", "recommendation"];
-    for (const key of requiredStrings) {
-      if (typeof issue[key] !== "string" || issue[key].trim().length === 0) {
-        throw new Error(`Invalid AI response: issue ${key} missing/invalid.`);
-      }
-    }
-    if (issue.file != null && typeof issue.file !== "string") {
-      throw new Error("Invalid AI response: issue file should be a string.");
-    }
-    if (issue.line != null && !Number.isInteger(issue.line)) {
-      throw new Error("Invalid AI response: issue line should be an integer.");
-    }
-  }
-  if (typeof data.explanation !== "string" || typeof data.suggestedFix !== "string") {
-    throw new Error("Invalid AI response: explanation/suggestedFix should be strings.");
-  }
+  const riskLevel = allowedRisk.has(data?.riskLevel) ? data.riskLevel : "Medium";
+  const issuesFoundRaw = Array.isArray(data?.issuesFound) ? data.issuesFound : [];
+  const issuesFound = issuesFoundRaw.map(normalizeIssue);
+
+  const explanation =
+    typeof data?.explanation === "string" && data.explanation.trim()
+      ? data.explanation
+      : "Automated review completed with Gemini.";
+
+  const suggestedFix =
+    typeof data?.suggestedFix === "string" && data.suggestedFix.trim()
+      ? data.suggestedFix
+      : "Address the listed issues, then re-run analysis.";
+
+  return { riskLevel, issuesFound, explanation, suggestedFix };
 }
 
 function toMarkdown(review) {
@@ -157,17 +148,36 @@ function toMarkdown(review) {
   ].join("\n");
 }
 
-function buildPromptWithRules(settings = {}) {
-  const prompt = [REVIEW_PROMPT];
-
-  if (settings.ignoreStyling) {
-    prompt.push("Ignore pure formatting/styling-only comments unless they cause bugs or security risks.");
-  }
-  if (settings.strictMode) {
-    prompt.push("Be strict: flag edge cases, risky logic, and potential reliability issues aggressively.");
-  }
-
-  return prompt.join(" ");
+function buildPrompt(code, settings = {}) {
+  return [
+    REVIEW_PROMPT,
+    "",
+    `Strict Mode: ${Boolean(settings.strictMode)}`,
+    `Ignore Styling: ${Boolean(settings.ignoreStyling)}`,
+    "",
+    "Return JSON with this exact structure:",
+    "{",
+    '  "riskLevel": "Low|Medium|High|Critical",',
+    '  "issuesFound": [',
+    "    {",
+    '      "title": "",',
+    '      "severity": "Low|Medium|High|Critical",',
+    '      "category": "",',
+    '      "file": null,',
+    '      "line": null,',
+    '      "description": "",',
+    '      "recommendation": ""',
+    "    }",
+    "  ],",
+    '  "explanation": "",',
+    '  "suggestedFix": ""',
+    "}",
+    "",
+    "Code to review:",
+    "```",
+    code,
+    "```"
+  ].join("\n");
 }
 
 async function analyzeCode(code, options = {}) {
@@ -176,57 +186,22 @@ async function analyzeCode(code, options = {}) {
   }
 
   try {
-    const client = getOpenAIClient();
-    const prompt = buildPromptWithRules(options.settings);
-    const response = await withRetries(
-      () =>
-        withTimeout(
-          client.responses.create({
-            model: OPENAI_MODEL,
-            input: [
-              {
-                role: "system",
-                content: [{ type: "input_text", text: prompt }]
-              },
-              {
-                role: "user",
-                content: [
-                  {
-                    type: "input_text",
-                    text: [
-                "Review this cleaned PR diff only:",
-                "```",
-                code,
-                "```",
-                "Return JSON with keys: riskLevel, issuesFound, explanation, suggestedFix.",
-                "For each item in issuesFound, return object keys:",
-                "title, severity (Low|Medium|High|Critical), category, file, line, description, recommendation.",
-                "Do not mention any code or files that are not in the provided diff."
-              ].join("\n")
-            }
-          ]
-        }
-            ],
-            text: {
-              format: {
-                type: "json_schema",
-                name: "code_review_response",
-                schema: REVIEW_SCHEMA,
-                strict: true
-              }
-            }
-          }),
-          AI_TIMEOUT_MS
-        ),
+    const client = getGeminiClient();
+    const model = client.getGenerativeModel({ model: GEMINI_MODEL });
+    const prompt = buildPrompt(code, options.settings || {});
+
+    const result = await withRetries(
+      () => withTimeout(model.generateContent(prompt), AI_TIMEOUT_MS),
       AI_MAX_RETRIES
     );
 
-    const parsed = JSON.parse(response.output_text);
-    validateReviewResponse(parsed);
+    const text = result?.response?.text?.() || "";
+    const parsed = extractJsonObject(text);
+    const normalized = normalizeReview(parsed);
 
     return {
-      ...parsed,
-      markdown: toMarkdown(parsed)
+      ...normalized,
+      markdown: toMarkdown(normalized)
     };
   } catch (error) {
     throw new Error(`AI analysis failed: ${error.message}`);
