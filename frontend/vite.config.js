@@ -6,9 +6,11 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      "/history": "http://localhost:5003",
-      "/settings": "http://localhost:5003",
-      "/analyze": "http://localhost:5003",
+      "/api": {
+        target: "https://gitguard-ai-backkend.onrender.com",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ""),
+      },
     },
   },
 });
