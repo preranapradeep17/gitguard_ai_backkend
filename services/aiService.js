@@ -76,6 +76,9 @@ async function withRetries(taskFn, maxRetries) {
       if (attempt === maxRetries) {
         break;
       }
+      // Exponential backoff
+      const delay = 2000 * Math.pow(2, attempt);
+      await new Promise(r => setTimeout(r, delay));
     }
   }
   throw lastError;

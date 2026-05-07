@@ -7,6 +7,7 @@ const settingsRoute = require("./routes/settings");
 const historyRoute = require("./routes/history");
 
 const app = express();
+const frontendPath = path.join(__dirname, "frontend");
 
 app.use(express.json({
   limit: "2mb",
@@ -25,6 +26,11 @@ app.use("/webhook", webhookRoute);
 app.use("/analyze", analyzeRoute);
 app.use("/settings", settingsRoute);
 app.use("/history", historyRoute);
+app.use("/frontend", express.static(frontendPath));
+
+app.get("/dashboard", (req, res) => {
+  res.sendFile(path.join(frontendPath, "index.html"));
+});
 
 app.get("/", (req, res) => {
   res.send("GitGuard AI running 🚀");
