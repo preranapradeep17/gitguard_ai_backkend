@@ -4,7 +4,7 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 dotenv.config();
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const AI_TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS || 45000);
 const AI_MAX_RETRIES = Number(process.env.AI_MAX_RETRIES || 2);
 
@@ -187,22 +187,48 @@ async function analyzeCode(code, options = {}) {
 
   try {
     const client = getGeminiClient();
-    const model = client.getGenerativeModel({ model: GEMINI_MODEL });
     const prompt = buildPrompt(code, options.settings || {});
+    const modelCandidates = [
+      GEMINI_MODEL,
+      "gemini-2.5-flash",
+      "gemini-2.5-flash-lite",
+      "gemini-2.0-flash",
+      "gemini-1.5-flash"
+    ].filter((value, index, arr) => value && arr.indexOf(value) === index);
 
-    const result = await withRetries(
-      () => withTimeout(model.generateContent(prompt), AI_TIMEOUT_MS),
-      AI_MAX_RETRIES
-    );
+    let lastError;
 
-    const text = result?.response?.text?.() || "";
-    const parsed = extractJsonObject(text);
-    const normalized = normalizeReview(parsed);
+    for (const modelName of modelCandidates) {
+      try {
+        const model = client.getGenerativeModel({ model: modelName });
+        const result = await withRetries(
+          () => withTimeout(model.generateContent(prompt), AI_TIMEOUT_MS),
+          AI_MAX_RETRIES
+        );
 
-    return {
-      ...normalized,
-      markdown: toMarkdown(normalized)
-    };
+        const text = result?.response?.text?.() || "";
+        const parsed = extractJsonObject(text);
+        const normalized = normalizeReview(parsed);
+
+        return {
+          ...normalized,
+          markdown: toMarkdown(normalized)
+        };
+      } catch (error) {
+        lastError = error;
+        const message = String(error?.message || "");
+        const modelNotFound =
+          message.includes("is not found") ||
+          message.includes("NOT_FOUND") ||
+          message.includes("not supported for generateContent");
+
+        if (!modelNotFound) {
+          throw error;
+        }
+      }
+    }
+
+    throw lastError || new Error("No compatible Gemini model found.");
   } catch (error) {
     throw new Error(`AI analysis failed: ${error.message}`);
   }
