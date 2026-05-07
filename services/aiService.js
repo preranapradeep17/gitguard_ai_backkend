@@ -178,13 +178,13 @@ async function analyzeCode(code, options = {}) {
             input: [
               {
                 role: "system",
-                content: [{ type: "text", text: prompt }]
+                content: [{ type: "input_text", text: prompt }]
               },
               {
                 role: "user",
                 content: [
                   {
-                    type: "text",
+                    type: "input_text",
                     text: [
                 "Review this cleaned PR diff only:",
                 "```",
