@@ -28,7 +28,18 @@ export default function Dashboard() {
 
   const filtered = history.filter(r => {
     const matchRisk = filter === "All" || r.riskLevel === filter;
-    const matchSearch = !search || r.repo?.toLowerCase().includes(search.toLowerCase());
+    const term = search.trim().toLowerCase();
+    const searchableText = [
+      r.repo,
+      r.repository,
+      r.repoUrl,
+      r.analysis?.explanation,
+      r.analysis?.suggestedFix
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    const matchSearch = !term || searchableText.includes(term);
     return matchRisk && matchSearch;
   });
 
