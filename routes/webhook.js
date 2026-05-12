@@ -21,11 +21,31 @@ router.post("/", verifySignature, (req, res) => {
         return res.status(400).send("Invalid payload");
       }
 
-      if (["opened", "reopened", "synchronize"].includes(action)) {
-        const owner = req.body.repository.owner.login;
-        const repo = req.body.repository.name;
-        const prNumber = pr.number;
+      const owner = req.body.repository.owner.login;
+      const repo = req.body.repository.name;
+      const prNumber = pr.number;
 
+      // Record webhook activity immediately so dashboard reflects PR events
+      // even if downstream AI/comment steps fail.
+      addReview({
+        repo: `${owner}/${repo}`,
+        prNumber,
+        settings: {},
+        riskLevel: "Low",
+        issuesCount: 0,
+        analysis: {
+          riskLevel: "Low",
+          issuesFound: [],
+          explanation: `Webhook event received: pull_request.${action} for PR #${prNumber}.`,
+          suggestedFix: "No action required.",
+          markdown: ""
+        },
+        timestamp: new Date().toISOString(),
+        source: "webhook",
+        action
+      });
+
+      if (["opened", "reopened", "synchronize"].includes(action)) {
         // ✅ Send response immediately (GitHub requires fast response)
         res.status(200).send("Webhook received");
 
@@ -38,32 +58,7 @@ router.post("/", verifySignature, (req, res) => {
 
         return;
       } else if (action === "closed") {
-        const owner = req.body.repository.owner.login;
-        const repo = req.body.repository.name;
-        const prNumber = pr.number;
-        const merged = Boolean(pr.merged);
-
-        addReview({
-          repo: `${owner}/${repo}`,
-          prNumber,
-          settings: {},
-          riskLevel: "Low",
-          issuesCount: 0,
-          analysis: {
-            riskLevel: "Low",
-            issuesFound: [],
-            explanation: merged
-              ? `PR #${prNumber} was merged and closed.`
-              : `PR #${prNumber} was closed without merge.`,
-            suggestedFix: "No action required.",
-            markdown: ""
-          },
-          timestamp: new Date().toISOString(),
-          source: "webhook",
-          action
-        });
-
-        logger.info(`🧾 Recorded closed PR event for ${owner}/${repo}#${prNumber}`);
+        logger.info(`🧾 Recorded pull_request.closed event for ${owner}/${repo}#${prNumber}`);
         return res.status(200).send("Webhook received");
       } else {
         logger.info(`Ignored PR action: ${action}`);
