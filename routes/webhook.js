@@ -4,6 +4,7 @@ const router = express.Router();
 const verifySignature = require("../middleware/verifySignature");
 const githubService = require("../services/githubService");
 const logger = require("../utils/logger");
+const { addReview } = require("../models/reviewHistory");
 
 router.post("/", verifySignature, (req, res) => {
   try {
@@ -36,6 +37,34 @@ router.post("/", verifySignature, (req, res) => {
           });
 
         return;
+      } else if (action === "closed") {
+        const owner = req.body.repository.owner.login;
+        const repo = req.body.repository.name;
+        const prNumber = pr.number;
+        const merged = Boolean(pr.merged);
+
+        addReview({
+          repo: `${owner}/${repo}`,
+          prNumber,
+          settings: {},
+          riskLevel: "Low",
+          issuesCount: 0,
+          analysis: {
+            riskLevel: "Low",
+            issuesFound: [],
+            explanation: merged
+              ? `PR #${prNumber} was merged and closed.`
+              : `PR #${prNumber} was closed without merge.`,
+            suggestedFix: "No action required.",
+            markdown: ""
+          },
+          timestamp: new Date().toISOString(),
+          source: "webhook",
+          action
+        });
+
+        logger.info(`🧾 Recorded closed PR event for ${owner}/${repo}#${prNumber}`);
+        return res.status(200).send("Webhook received");
       } else {
         logger.info(`Ignored PR action: ${action}`);
       }
