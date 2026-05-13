@@ -73,6 +73,21 @@ export default function AnalyzePage() {
         ) : "✨ Analyze Code"}
       </button>
 
+      {loading && (
+        <div className="glass rounded-2xl border border-brand-200 bg-white/80 p-5 shadow-sm animate-fade-in">
+          <div className="flex items-center gap-3">
+            <svg className="w-5 h-5 text-brand-500 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v3a5 5 0 0 0-5 5H4z" />
+            </svg>
+            <div>
+              <p className="text-sm font-bold text-slate-800">AI analysis in progress</p>
+              <p className="text-xs text-slate-500">Scanning code, checking risk, and preparing recommendations...</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {error && (
         <div className="glass rounded-xl p-4 border border-red-300 bg-red-50 text-red-600 text-sm font-semibold shadow-sm">{error}</div>
       )}
