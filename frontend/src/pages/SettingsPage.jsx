@@ -1,14 +1,15 @@
 import { useState, useEffect } from "react";
 import { saveSettings, fetchSettings } from "../api";
 import Toggle from "../components/Toggle";
+import { useToast } from "../components/ToastProvider";
 
 const DEFAULT_REPO = "your-org/your-repo";
 
 export default function SettingsPage() {
+  const { showToast } = useToast();
   const [repo, setRepo] = useState(DEFAULT_REPO);
   const [strictMode, setStrictMode] = useState(false);
   const [ignoreStyling, setIgnoreStyling] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -24,9 +25,10 @@ export default function SettingsPage() {
     setLoading(true);
     try {
       await saveSettings(repo, { strictMode, ignoreStyling });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
-    } catch {}
+      showToast("Settings saved successfully.", "success");
+    } catch {
+      showToast("Could not save settings. Please retry.", "error");
+    }
     setLoading(false);
   }
 
@@ -70,7 +72,7 @@ export default function SettingsPage() {
         disabled={loading}
         className="flex items-center gap-2 px-8 py-3.5 rounded-xl bg-brand-500 hover:bg-brand-600 disabled:opacity-40 text-white font-bold text-sm transition-all shadow-md hover:shadow-lg glow-brand"
       >
-        {loading ? "Saving…" : saved ? "🎀 Saved Successfully!" : "💾 Save Settings"}
+        {loading ? "Saving…" : "💾 Save Settings"}
       </button>
     </div>
   );

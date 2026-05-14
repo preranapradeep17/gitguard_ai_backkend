@@ -2,8 +2,10 @@ import { useState, useEffect, useCallback } from "react";
 import { fetchHistory } from "../api";
 import ReviewCard from "../components/ReviewCard";
 import StatsCard from "../components/StatsCard";
+import { useToast } from "../components/ToastProvider";
 
 export default function Dashboard() {
+  const { showToast } = useToast();
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("All");
@@ -13,9 +15,11 @@ export default function Dashboard() {
     try {
       const data = await fetchHistory();
       setHistory(Array.isArray(data) ? data.slice().reverse() : []);
-    } catch {}
+    } catch {
+      showToast("Unable to refresh review history.", "error");
+    }
     setLoading(false);
-  }, []);
+  }, [showToast]);
 
   useEffect(() => { load(); }, [load]);
   // Auto-refresh every 30s

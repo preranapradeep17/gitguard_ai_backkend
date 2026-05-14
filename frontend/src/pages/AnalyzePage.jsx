@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { analyzeManual } from "../api";
 import { severityColor } from "../utils";
+import { useToast } from "../components/ToastProvider";
 
 export default function AnalyzePage() {
+  const { showToast } = useToast();
   const [code, setCode] = useState("");
   const [strictMode, setStrictMode] = useState(false);
   const [ignoreStyling, setIgnoreStyling] = useState(false);
@@ -11,15 +13,20 @@ export default function AnalyzePage() {
   const [error, setError] = useState("");
 
   async function handleAnalyze() {
-    if (!code.trim()) return;
+    if (!code.trim()) {
+      showToast("Paste code before running analysis.", "info");
+      return;
+    }
     setLoading(true);
     setError("");
     setResult(null);
     try {
       const data = await analyzeManual(code, { strictMode, ignoreStyling });
       setResult(data);
+      showToast(`Analysis complete: ${data?.riskLevel || "Unknown"} risk`, "success");
     } catch (e) {
       setError(e?.response?.data?.error || e.message || "Analysis failed.");
+      showToast("Analysis failed. Please try again.", "error");
     } finally {
       setLoading(false);
     }
