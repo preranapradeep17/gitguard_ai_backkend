@@ -3,6 +3,7 @@ import { fetchHistory } from "../api";
 import ReviewCard from "../components/ReviewCard";
 import StatsCard from "../components/StatsCard";
 import { useToast } from "../components/ToastProvider";
+import EmptyStateIllustration from "../components/EmptyStateIllustrations";
 
 export default function Dashboard() {
   const { showToast } = useToast();
@@ -113,7 +114,9 @@ export default function Dashboard() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="glass rounded-3xl p-16 text-center shadow-sm">
-          <p className="text-5xl mb-4 opacity-80 animate-bounce" style={{ animationDuration: '3s' }}>✨</p>
+          <div className="mb-4">
+            <EmptyStateIllustration type={history.length === 0 ? "no-reviews" : "no-matches"} />
+          </div>
           <p className="text-slate-500 text-sm font-medium">
             {history.length === 0
               ? "No reviews yet. Open a GitHub PR to trigger your first analysis!"
