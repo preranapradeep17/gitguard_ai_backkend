@@ -11,11 +11,30 @@ const NAV = [
 
 export default function App() {
   const [page, setPage] = useState("dashboard");
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  function handleNavigate(id) {
+    setPage(id);
+    setMobileSidebarOpen(false);
+  }
 
   return (
     <div className="min-h-screen flex text-slate-800">
+      {mobileSidebarOpen && (
+        <button
+          type="button"
+          aria-label="Close navigation menu"
+          onClick={() => setMobileSidebarOpen(false)}
+          className="fixed inset-0 z-20 bg-slate-900/30 backdrop-blur-[1px] md:hidden"
+        />
+      )}
+
       {/* ── Sidebar ── */}
-      <aside className="w-60 shrink-0 glass border-r border-brand-200/50 flex flex-col py-6 px-4 fixed h-full z-10">
+      <aside
+        className={`w-60 shrink-0 glass border-r border-brand-200/50 flex flex-col py-6 px-4 fixed h-full z-30 transition-transform duration-300 md:translate-x-0 ${
+          mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
         {/* Logo */}
         <div className="flex flex-col items-center justify-center gap-2 px-2 mb-8 text-center mt-4">
           <img src="/aesthetic-shield.png" alt="Shield Logo" className="w-20 h-20 object-contain drop-shadow-md animate-bounce" style={{ animationDuration: '3s' }} />
@@ -30,7 +49,7 @@ export default function App() {
           {NAV.map(({ id, label, icon }) => (
             <button
               key={id}
-              onClick={() => setPage(id)}
+              onClick={() => handleNavigate(id)}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-semibold transition-all ${
                 page === id
                   ? "bg-brand-100 text-brand-600 shadow-sm border border-brand-200"
@@ -50,14 +69,23 @@ export default function App() {
       </aside>
 
       {/* ── Main ── */}
-      <main className="ml-60 flex-1 p-8 overflow-y-auto">
+      <main className="md:ml-60 flex-1 p-4 md:p-8 overflow-y-auto">
         {/* Top bar */}
-        <header className="flex items-center justify-between mb-8">
+        <header className="flex items-center justify-between mb-6 md:mb-8">
           <div>
+            <button
+              type="button"
+              onClick={() => setMobileSidebarOpen(true)}
+              className="md:hidden mb-3 inline-flex items-center gap-2 px-3 py-2 rounded-xl glass text-slate-700 text-xs font-semibold"
+              aria-label="Open navigation menu"
+            >
+              <span className="text-base leading-none">☰</span>
+              Menu
+            </button>
             <p className="text-xs text-brand-400 font-semibold uppercase tracking-widest mb-1">GitGuard AI</p>
             <h1 className="text-2xl font-extrabold text-slate-900 capitalize drop-shadow-sm">{page}</h1>
           </div>
-          <div className="flex items-center gap-2 px-4 py-2 glass rounded-full text-xs font-semibold text-brand-600 shadow-sm">
+          <div className="hidden sm:flex items-center gap-2 px-4 py-2 glass rounded-full text-xs font-semibold text-brand-600 shadow-sm">
             <span className="w-2.5 h-2.5 rounded-full bg-brand-400 animate-pulse shadow-[0_0_8px_rgba(255,105,180,0.6)]" />
             Webhook Active
           </div>
